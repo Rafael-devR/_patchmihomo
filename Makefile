@@ -119,6 +119,8 @@ ccflags-y += -I$(KDIR)/source
 # names the newer kernel stops declaring and exposes entry points through
 # headers the shim files do not include; older compilers ignore the flag
 ccflags-y += -Wno-missing-prototypes
+ccflags-y += -Wno-unknown-sanitizers
+ccflags-y += -include $(src)/src/kcfi_safe.h
 
 # KernCall: enable sys_call_table slot patching
 # off by default. enable with make DROID_LKM_LAYOUT_FALLBACK=1

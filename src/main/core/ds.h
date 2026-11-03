@@ -28,6 +28,7 @@
 #include "hk_patch.h"
 #include "ds_compat.h"
 #include "ds_hook.h"
+#include "kcfi_safe.h"
 #include "ds_ti.h"
 
 static inline pid_t droid_lkm_task_pid(const struct task_struct *task)
