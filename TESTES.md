@@ -175,10 +175,60 @@ o build DDK usar header GKI diferente.
   Ou seja: sem os dois hooks críticos (`create_new_namespaces` e
   `copy_namespaces`), o load falha; `degrade=1` é proibido por regra.
 
+## 2026-11-03 — T8: build no GitHub Actions (android15-6.6)
+
+Run `41590802923` (workflow_dispatch, ref `feat/gki-6.6-misc`), commit
+`557c289`. Todos os 7 jobs da matriz verdes; `build-matrix
+(android15-6.6)` em 1m38s. Gate de zero warnings passou
+(`grep -nE "error:|warning:" build.log` sem match — atenção: o gate é
+case-sensitive e não pega `WARNING:` maiúsculo do modpost).
+
+Artefatos baixados para `/tmp/opencode/art/droid_lkm-android15-6.6/`:
+
+| arquivo | bytes | sha256 |
+|---|---|---|
+| droid_lkm.ko | 4751800 | `1ec4c53ea38347326995297e517c3d70f9fb74619926c21f4c98e6819f61287b` |
+| droid_lkm_misc.ko | 4388896 | `341d9269b7b2885a0b2abb3a06fcfe87101f22d38e9de55d4dc2bf9e05b926c3` |
+| droid_lkm_vendor.ko | 1712264 | `644bd4e010916fb8c66450992995c79d6f34545379179fa3b3ab6671f0fe5b7d` |
+
+O `.ko` já existente em `/sdcard/Download/droid_lkm-android15-6.6/` é
+byte-idêntico a este artefato (mesmo sha256 `1ec4c53e…`).
+
+## 2026-11-03 — T9: vermagic do artefato x kernel do device (BLOQUEIO)
+
+- Artefato (`strings droid_lkm.ko | grep '^vermagic='`):
+  `6.6.127-4k-g46a034eca005-dirty SMP preempt mod_unload modversions aarch64`
+- Device (`a36-kheaders/include/generated/utsrelease.h` + `autoconf.h` com
+  `CONFIG_SMP=1`, `CONFIG_PREEMPT=1`, `CONFIG_MODULE_UNLOAD=1`,
+  `CONFIG_MODVERSIONS=1`):
+  `6.6.118-android15-8-34442516-user-abA366EXXUCDZIF-4k SMP preempt mod_unload modversions aarch64`
+
+`uname -r` do device = `6.6.118-android15-8-34442516-user-abA366EXXUCDZIF-4k`.
+Logo `check_modinfo()` recusa o módulo (ENOEXEC) **antes** de qualquer hook.
+`CONFIG_MODULE_FORCE_LOAD` não está setado no kernel do device
+(`a36-kheaders/include/generated/autoconf.h`) e forçar é proibido por regra.
+Também proibido editar a string de vermagic no `.ko`.
+
+Registro de imagens DDK (`ghcr.io/ylarod/ddk-min`, token anônimo): 23 tags,
+só duas datadas para `android15-6.6` (`20260313` e `20260828`), e ambas
+apontam para o mesmo config (criado 2026-03-12, `KDIR=/opt/ddk/kdir/
+android15-6.6`) que produz 6.6.127. Não existe imagem 6.6.118 publicada.
+
+Observações que reduzem o escopo de um rebuild:
+- `__versions` tem tamanho 0 (sem CRC por símbolo), então um rebuild
+  contra 6.6.118 não precisa de `Module.symvers` casando CRC.
+- 203 símbolos `UND` (todos precisam ser exportados pelo kernel do device);
+  `create_new_namespaces`/`copy_namespaces` **não** estão entre eles — são
+  resolvidos em runtime (kallsyms), não no link.
+- `CONFIG_TRIM_UNUSED_KSYMS=1` no device: se algum dos 203 não for
+  exportado, o load falha com `Unknown symbol` mesmo com vermagic igual.
+  Só dá para verificar no device (kallsyms) ou no source Samsung.
+- `CONFIG_MODULE_SIG_FORCE` não setado → assinatura não bloqueia.
+
 ## Pendente
 
-- T8: build no GitHub Actions (`android15-6.6`) e leitura do log
-  (procurar `nsproxy hook unavailable`, `layout: BTF x/y`, `policy`).
-- T9: no aparelho (SÓ COM AUTORIZAÇÃO): `insmod` com `degrade=0`, conferir
+- T10: reconstruir contra 6.6.118 (source Samsung do build A366EXXUCDZIF ou
+  DDK equivalente) e repetir T8 com o vermagic correto.
+- T11: no aparelho (SÓ COM AUTORIZAÇÃO): `insmod` com `degrade=0`, conferir
   `ds_hook_report` e `layout_report` em `dmesg`, e testar
   `unshare -p -i` / `clone(CLONE_NEWPID|CLONE_NEWIPC)`.
